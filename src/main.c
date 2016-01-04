@@ -5,39 +5,13 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#include "main.h"
 #include "helpers.h"
 #include "parser.h"
+#include "builtin.h"
 
-#define MAX_INPUT_LEN 1023
 volatile  int RUNNING = 1;
-char CURRENT_DIR[MAX_INPUT_LEN];
-
-int cd(char ** args) {
-	if (args[1] == NULL) {
-		fprintf(stderr, "podaj lokalizacje!\n");
-	} else {
-		if (chdir(args[1]) != 0) {
-			perror("SOPshell");
-		}
-	}
-	getcwd(CURRENT_DIR, MAX_INPUT_LEN);
-	return 1;
-}
-
-int (*commands_func[]) (char **) = {
-	&cd,
-	&exit
-};
-
-char *commands_name[] = {
-	"cd",
-	"exit"
-};
-
-int availible_cmds() {
-	return sizeof(commands_name) / sizeof(commands_name[0]);
-}
-
 
 char * read_cmd() {
 	int cmd_size = MAX_INPUT_LEN;
@@ -68,51 +42,157 @@ char * read_cmd() {
 	}
 }
 
-int parse_cmd(char ** cmd, int  args_count, int logical) {
+int has_pipe(char ** cmd, int args_count){
+    for(int i=0;i<args_count; i++) {
+        if (strcmp(cmd[i], "|") == 0) {
+            return i;
+        }
+    }
+    return 0;
+}
+
+
+int parse_cmd(char ** cmd, int args_count, int logical, int _stdin, int _stdout) {
 	if(cmd[0]) {
-		for (int i=0; i<availible_cmds(); i++) {
+		for (int i=0; i < availible_cmds(); i++) {
 			if (strcmp(commands_name[i], cmd[0]) == 0) {
 				return (*commands_func[i])(cmd);
 			}
 		}
 		int run_background = 0;
-		if(strcmp(cmd[args_count], "&") == 0) {
-			cmd[args_count] = NULL;
-			run_background = 1;
-		}
-		return exec_cmd(cmd, run_background, logical);
+
+        // sprawdzamy czy polecenie chce przekazac stdout
+        if (!has_pipe(cmd, args_count)) {
+            for (int i = 0; i < args_count; i++) {
+
+                // stdout
+                if (strcmp(cmd[i], "1>") == 0) {
+                    if (!cmd[i + 1]) {
+                        fprintf(stderr, "Brakujący argument dla przekierowania STDOUT\n");
+                        return 0;
+                    }
+                }
+                // stderr
+                if (strcmp(cmd[i], "2>") == 0) {
+                    if (!cmd[i + 1]) {
+                        fprintf(stderr, "Brakujący argument dla przekierowania STDERR\n");
+                        return 0;
+                    }
+                }
+                // last arg
+                if (i == args_count-1 && strcmp(cmd[i], "&") == 0) {
+                    cmd[args_count-1] = NULL;
+                    run_background = 1;
+                }
+            }
+        }
+		int result = exec_cmd(cmd, args_count, run_background, logical, 0, 1);
+        return result;
 	}
 	return 0;
 }
 
-
-int exec_cmd(char **args, int run_background, int logical) {
-	pid_t pid;
+int exec_cmd(char **args, int args_count, int run_background, int logical, int _stdin, int _stdout) {
+	pid_t pid, ppid;
 	int status;
 
     if (run_background && logical) {
         fprintf(stderr, "Polecenia warunkowe nie mogą występować dla poleceń uruchamianych w tle!\n");
         return 0;
     }
-	pid = fork();
-	if (pid == 0) {
-        int result = execvp(args[0], args);
-		if (result == -1) {
-            fprintf(stderr, "SOPshell: komenda nie znaleziona:  %s\n", args[0]);
-			exit(EXIT_FAILURE);
-		}
-		exit(EXIT_SUCCESS);
-	} else if (pid < 0) {
-		perror("SOPshell");
-        status = EXIT_FAILURE;
-	} else if(!run_background) {
-		do {
-			waitpid(pid, &status, WUNTRACED);
-		} while (!WIFEXITED(status) && !WIFSIGNALED(status));
-	}
 
-//	printf("Wartosc: %d\n", status);
-	return status == 0;
+
+
+//        if (ppid == 0) {
+//            // zamknij stdout
+//            close(_pipe[1]);
+//            return exec_cmd(&args[pipe_idx + 1], args_count - pipe_idx, run_background, logical, _pipe[0], _stdout);
+//        } else {
+//            close(_pipe[0]);
+//            char ** new_args = malloc((pipe_idx+1) * sizeof(args[0]));
+//            memcpy(new_args, args, pipe_idx * sizeof(args[0]));
+//            new_args[pipe_idx+1] = NULL;
+//            for(int i =0; i<pipe_idx; i++) {
+//                printf("%s\n", new_args[i]);
+//            }
+//
+//            return exec_cmd(new_args, pipe_idx-1, run_background, logical, _pipe[0], _stdout);
+//        }
+
+
+
+
+	pid = fork();
+    switch (pid) {
+
+        // error
+        case -1: {
+            perror("SOPshell");
+            status = EXIT_FAILURE;
+            break;
+        }
+        // ls -l | tr a-z A-Z
+        // child
+        case 0: {
+            int pipe_idx = has_pipe(args, args_count);
+            int child_pid = -1;
+
+            if(pipe_idx) {
+
+                int _pipe[2];
+                if (pipe(_pipe) == -1) {
+                    perror("tworzenie strumienia nienazwanego");
+                    exit(EXIT_FAILURE);
+                }
+
+                child_pid = fork();
+                if (child_pid == 0) {
+                    close(_pipe[1]);
+                    return exec_cmd(&args[pipe_idx + 1], args_count - pipe_idx - 1, run_background, logical, _pipe[0], _stdout);
+                } else {
+                    close(_pipe[0]);
+                    char ** new_args = malloc((pipe_idx+1) * sizeof(args[0]));
+                    memcpy(new_args, args, pipe_idx * sizeof(args[0]));
+                    new_args[pipe_idx+1] = NULL;
+                    args = new_args;
+                    _stdout = _pipe[1];
+                }
+            };
+            dup2(_stdin, 0);
+            dup2(_stdout, 1);
+            int result = execvp(args[0], args);
+            if (result == -1) {
+                perror("SOP SHELL");
+                fprintf(stderr, "SOPshell: komenda nie znaleziona: %s\n", args[0]);
+                exit(EXIT_FAILURE);
+            }
+            if(child_pid > 0) {
+                do {
+                    waitpid(child_pid, &status, WUNTRACED);
+                } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+            }
+            exit(EXIT_SUCCESS);
+        }
+
+        // owner
+        default: {
+            if(run_background) {
+                fprintf(stdout, "%s pid: %d\n", args[0], pid);
+            } else {
+                do {
+                    RUNNING = 1;
+                    waitpid(pid, &status, WUNTRACED);
+                    if(!RUNNING){
+                        kill(pid, SIGINT);
+                        printf("\n");
+                    }
+                } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+            }
+        }
+    }
+    //printf(" WYKONANO: %s\n", args[0]);
+    return status == 0;
+
 }
 
 void draw_prompt() {
@@ -124,24 +204,30 @@ int run_cmd(char ** cmd, char * ops, int ops_count) {
     int args_count;
     int iter = 0;
     char ** args;
+    int logical = 0;
+    if (ops_count > 0) logical = 1;
     args = split_cmd(cmd[iter++], &args_count);
-    int res = parse_cmd(args, args_count, 1);
-    free(args);
-    if (ops_count > 0) {
+    int res = parse_cmd(args, args_count, logical, stdin, stdout);
+    if (logical) {
         do {
             args = split_cmd(cmd[iter], &args_count);
             res = (*logic_tokens[token_idx(ops[iter- 1])].func)(res, args, args_count);
-            free(args);
             iter++;
         } while(iter <= ops_count);
     }
 }
 
 
+void kill_task(){
+    RUNNING = 0;
+}
+
 int main(int argc, char ** argv) {
+    perror("SOPshell");
 	getcwd(CURRENT_DIR, MAX_INPUT_LEN);
-	signal(SIGINT, SIG_IGN);
-	char * cmd, **cmds;
+	signal(SIGINT, kill_task);
+    signal(SIGPIPE, SIG_IGN);
+    char * cmd, **cmds;
 	char * logical_op;
 	int logical_op_count;
 	if (argc > 1) {
@@ -158,7 +244,7 @@ int main(int argc, char ** argv) {
 			}
 		}
 	} else {
-		while(RUNNING) {
+		while(1) {
 			draw_prompt();
 			cmd = read_cmd();
 			if (strlen(cmd) > 0) {
@@ -169,7 +255,7 @@ int main(int argc, char ** argv) {
                 free(logical_op);
 			}
             free(cmd);
-			fflush(stdin);
+			//fflush(stdin);
 		}
 	}
 

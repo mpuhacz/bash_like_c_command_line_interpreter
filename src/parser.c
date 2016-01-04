@@ -17,16 +17,16 @@ token_to_function logic_tokens[] = {
 
 
 int _any(int val, char ** cmd, int args_count) {
-    parse_cmd(cmd, args_count, 1);
+    parse_cmd(cmd, args_count, 1, 0, 1);
 	return 1;
 }
 
 int _and(int val, char ** cmd, int args_count) {
-	return val && parse_cmd(cmd, args_count, 1);
+	return val && parse_cmd(cmd, args_count, 1, 0, 1);
 }
 
 int _or(int val, char ** cmd, int args_count) {
-    return val || parse_cmd(cmd, args_count, 1);
+    return val || parse_cmd(cmd, args_count, 1, 0, 1);
 }
 
 int check_token(char * cmd, int pos) {
@@ -84,7 +84,7 @@ char ** split_by_logical_operators(char * cmd, char * logical_operators, int * a
 			}
 		}
 	}
-	char * t = malloc((strlen(cmd) - new_pos) * sizeof(char));
+	char * t = malloc((strlen(cmd) - new_pos + 1) * sizeof(char));
 	strncpy(t, &cmd[new_pos], strlen(cmd) - new_pos);
 	tokens[iter] = t;
 	*arg_count = iter;
@@ -121,6 +121,6 @@ char ** split_cmd(char *cmd, int * arg_count) {
 		token = strtok(NULL, TOKENS);
 	}
 	tokens[position] = NULL;
-	*arg_count = position - 1;
+	*arg_count = position;
 	return tokens;
 }
