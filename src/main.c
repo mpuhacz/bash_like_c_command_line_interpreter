@@ -13,6 +13,7 @@
 #include <readline/readline.h>
 
 volatile  int RUNNING = 0;
+char prompt[100];
 
 char * read_cmd() {
     /*
@@ -48,10 +49,9 @@ char * read_cmd() {
         static char *line_read = NULL;
         if (line_read) {
             free (line_read);
-            line_read = (char *) NULL;
+            line_read = NULL;
         }
-        char prompt[100];
-        sprintf(prompt, "\x1b[31m[%s]\n ❯ \x1b[0m", CURRENT_DIR);
+
         line_read = readline (&prompt);
 
         if (line_read && *line_read) {
@@ -112,6 +112,7 @@ int parse_cmd(char ** cmd, int args_count, int logical, int _stdin, int _stdout)
                 // last arg
                 if (i == args_count-1 && strcmp(cmd[i], "&") == 0) {
                     cmd[args_count-1] = NULL;
+                    args_count--;
                     run_background = 1;
                 }
             }
@@ -140,6 +141,7 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
 
     pid = fork();
 
+
     switch (pid) {
 
         // error
@@ -151,8 +153,10 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
 
         // child
         case 0: {
+            printf("BEDE KURWA WYKONYWA %s", args[0]);
             int pipe_idx = has_pipe(args, args_count);
             pid_t child_pid = -1;
+
 
             if(pipe_idx) {
                 int _pipe[2];
@@ -187,19 +191,18 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
                     }
                 }
             };
-
             dup2(_stdin, 0);
             dup2(_stdout, 1);
+            //if (run_background) setpgid(0, 0);
             int result = execvp(args[0], args);
-            if (run_background) setpgid(0, 0);
-            if (result == -1) {
+            if ( result == -1) {
                 fprintf(stderr, "SOPshell: komenda nie znaleziona: %s\n", args[0]);
                 result = EXIT_FAILURE;
             }
+
             // ładnie zamykamy co otwieraliśmy
             close(_stdin);
             close(_stdout);
-
             exit(result);
         }
 
@@ -211,15 +214,16 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
                 do {
                     RUNNING = 1;
                     waitpid(pid, &status, WUNTRACED);
-                    if(!RUNNING) {
+                    if (!RUNNING) {
                         kill(pid, SIGINT);
                         printf("\n");
                     }
                 } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-                if (is_child) {
-                    exit(EXIT_SUCCESS);
-                }
             }
+            if (is_child) {
+                exit(EXIT_SUCCESS);
+            }
+
         }
     }
 
@@ -228,6 +232,7 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
 }
 
 void draw_prompt() {
+    sprintf(prompt, "\x1b[31m[%s]\n ❯ \x1b[0m", CURRENT_DIR);
     //fprintf(stdout, "\x1b[31m[%s]\n ❯ \x1b[0m", CURRENT_DIR);
 }
 
