@@ -86,14 +86,14 @@ int parse_cmd(char ** cmd, int args_count, int logical, int _stdin, int _stdout)
                 }
             }
         }
-		int result = exec_cmd(cmd, args_count, run_background, logical, 0, 1);
+		int result = exec_cmd(cmd, args_count, run_background, logical, 0, 1, 0);
         return result;
 	}
 	return 0;
 }
 
-int exec_cmd(char **args, int args_count, int run_background, int logical, int _stdin, int _stdout) {
-	pid_t pid, ppid;
+int exec_cmd(char **args, int args_count, int run_background, int logical, int _stdin, int _stdout, int is_child) {
+	pid_t pid;
 	int status;
 
     if (run_background && logical) {
@@ -102,27 +102,14 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
     }
 
 
-
-//        if (ppid == 0) {
-//            // zamknij stdout
-//            close(_pipe[1]);
-//            return exec_cmd(&args[pipe_idx + 1], args_count - pipe_idx, run_background, logical, _pipe[0], _stdout);
-//        } else {
-//            close(_pipe[0]);
-//            char ** new_args = malloc((pipe_idx+1) * sizeof(args[0]));
-//            memcpy(new_args, args, pipe_idx * sizeof(args[0]));
-//            new_args[pipe_idx+1] = NULL;
-//            for(int i =0; i<pipe_idx; i++) {
-//                printf("%s\n", new_args[i]);
-//            }
-//
-//            return exec_cmd(new_args, pipe_idx-1, run_background, logical, _pipe[0], _stdout);
-//        }
-
-
-
-
 	pid = fork();
+
+//    int pipe_idx = has_pipe(args, args_count);
+//    if(pipe_idx){
+//    char ** new_args = malloc((pipe_idx+1) * sizeof(args[0]));
+//    memcpy(new_args, args, pipe_idx * sizeof(args[0]));
+//    new_args[pipe_idx+1] = NULL;
+//        }
     switch (pid) {
 
         // error
@@ -131,14 +118,13 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
             status = EXIT_FAILURE;
             break;
         }
-        // ls -l | tr a-z A-Z
+
         // child
         case 0: {
             int pipe_idx = has_pipe(args, args_count);
-            int child_pid = -1;
+            pid_t child_pid = -1;
 
             if(pipe_idx) {
-
                 int _pipe[2];
                 if (pipe(_pipe) == -1) {
                     perror("tworzenie strumienia nienazwanego");
@@ -146,31 +132,42 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
                 }
 
                 child_pid = fork();
-                if (child_pid == 0) {
-                    close(_pipe[1]);
-                    return exec_cmd(&args[pipe_idx + 1], args_count - pipe_idx - 1, run_background, logical, _pipe[0], _stdout);
-                } else {
-                    close(_pipe[0]);
-                    char ** new_args = malloc((pipe_idx+1) * sizeof(args[0]));
-                    memcpy(new_args, args, pipe_idx * sizeof(args[0]));
-                    new_args[pipe_idx+1] = NULL;
-                    args = new_args;
-                    _stdout = _pipe[1];
+                switch (child_pid) {
+                    case -1: {
+                        perror("SOPshell");
+                        status = EXIT_FAILURE;
+                        break;
+                    }
+                    case 0: {
+                        if(args_count - pipe_idx - 1 > 0){
+                            close(_pipe[1]);
+                            return exec_cmd(&args[pipe_idx + 1], args_count - pipe_idx - 1, run_background, logical, _pipe[0], _stdout, 1);
+                        } else {
+                            exit(EXIT_SUCCESS);
+                        }
+                    }
+                    default: {
+                        close(_pipe[0]);
+                        char ** new_args = malloc((pipe_idx+1) * sizeof(args[0]));
+                        memcpy(new_args, args, pipe_idx * sizeof(args[0]));
+                        new_args[pipe_idx+1] = NULL;
+                        args = new_args;
+                        _stdout = _pipe[1];
+                    }
                 }
             };
+
             dup2(_stdin, 0);
             dup2(_stdout, 1);
+            int stat;
             int result = execvp(args[0], args);
             if (result == -1) {
-                perror("SOP SHELL");
+                perror("\nSOP SHELL");
                 fprintf(stderr, "SOPshell: komenda nie znaleziona: %s\n", args[0]);
                 exit(EXIT_FAILURE);
+                close(1);
             }
-            if(child_pid > 0) {
-                do {
-                    waitpid(child_pid, &status, WUNTRACED);
-                } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-            }
+            close(1);
             exit(EXIT_SUCCESS);
         }
 
@@ -187,16 +184,19 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
                         printf("\n");
                     }
                 } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+                if (is_child) {
+                    exit(EXIT_SUCCESS);
+                }
             }
         }
     }
-    //printf(" WYKONANO: %s\n", args[0]);
-    return status == 0;
+
+    return status == EXIT_SUCCESS;
 
 }
 
 void draw_prompt() {
-	printf("\x1b[31m[%s]\n ❯ \x1b[0m", CURRENT_DIR);
+	fprintf(stdout, "\x1b[31m[%s]\n ❯ \x1b[0m", CURRENT_DIR);
 }
 
 
@@ -223,7 +223,6 @@ void kill_task(){
 }
 
 int main(int argc, char ** argv) {
-    perror("SOPshell");
 	getcwd(CURRENT_DIR, MAX_INPUT_LEN);
 	signal(SIGINT, kill_task);
     signal(SIGPIPE, SIG_IGN);
@@ -255,7 +254,8 @@ int main(int argc, char ** argv) {
                 free(logical_op);
 			}
             free(cmd);
-			//fflush(stdin);
+			fflush(stdin);
+
 		}
 	}
 
