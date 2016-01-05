@@ -10,6 +10,7 @@
 #include "helpers.h"
 #include "parser.h"
 #include "builtin.h"
+#include <readline/readline.h>
 
 volatile  int RUNNING = 0;
 
@@ -17,32 +18,48 @@ char * read_cmd() {
     /*
      * funkcja odczytuje komende
      */
-    int cmd_size = MAX_INPUT_LEN;
-    int position = 0;
-    char *cmd = malloc(sizeof(char) * cmd_size);
-    int c;
+//    int cmd_size = MAX_INPUT_LEN;
+//    int position = 0;
+//    char *cmd = malloc(sizeof(char) * cmd_size);
+//    int c;
+//
+//    if (!cmd) {
+//        alloc_error();
+//    }
+//
+//    while (1) {
+//        c = getchar();
+//        if (c == EOF || c == '\n') {
+//            cmd[position] = '\0';
+//            return cmd;
+//        } else {
+//            cmd[position] = c;
+//        }
+//        position++;
+//        if (position >= cmd_size) {
+//            cmd_size += MAX_INPUT_LEN;
+//            cmd = realloc(cmd, cmd_size);
+//            if (!cmd) {
+//                alloc_error();
+//            }
+//        }
+//    }
 
-    if (!cmd) {
-        alloc_error();
-    }
+        static char *line_read = NULL;
+        if (line_read) {
+            free (line_read);
+            line_read = (char *) NULL;
+        }
 
-    while (1) {
-        c = getchar();
-        if (c == EOF || c == '\n') {
-            cmd[position] = '\0';
-            return cmd;
-        } else {
-            cmd[position] = c;
+        line_read = readline ("expression> ");
+
+        if (line_read && *line_read) {
+            add_history (line_read);
         }
-        position++;
-        if (position >= cmd_size) {
-            cmd_size += MAX_INPUT_LEN;
-            cmd = realloc(cmd, cmd_size);
-            if (!cmd) {
-                alloc_error();
-            }
-        }
-    }
+
+        return (line_read);
+
+
 }
 
 int has_pipe(char ** cmd, int args_count) {

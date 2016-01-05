@@ -1,7 +1,7 @@
 CC=gcc
 LD=gcc
 
-CFLAGS=--std=c11
+CFLAGS=--std=c11 -L/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk/usr/include -lreadline
 LDFLAGS=
 
 SRCS=$(shell ls src/*.c)
