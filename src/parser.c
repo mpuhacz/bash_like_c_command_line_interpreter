@@ -77,6 +77,7 @@ char ** split_by_logical_operators(char * cmd, char * logical_operators, int * a
                 alloc_error();
             } else {
                 strncpy(t, &cmd[new_pos], i - new_pos);
+                t[i - new_pos] = NULL;
                 tokens[iter] = t;
                 logical_operators[iter++] = cmd[i];
                 new_pos = i+2;
@@ -84,8 +85,8 @@ char ** split_by_logical_operators(char * cmd, char * logical_operators, int * a
         }
     }
     char * t = malloc((strlen(cmd) - new_pos + 1) * sizeof(char));
-    strcat(t, &cmd[new_pos]);
-    //strncpy(t, &cmd[new_pos], strlen(cmd) - new_pos);
+    strncpy(t, &cmd[new_pos], strlen(cmd) - new_pos + 1);
+    logical_operators[iter] = NULL;
     tokens[iter] = t;
     *arg_count = iter;
     return tokens;
