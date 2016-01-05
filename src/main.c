@@ -50,8 +50,9 @@ char * read_cmd() {
             free (line_read);
             line_read = (char *) NULL;
         }
-
-        line_read = readline ("expression> ");
+        char prompt[100];
+        sprintf(prompt, "\x1b[31m[%s]\n ❯ \x1b[0m", CURRENT_DIR);
+        line_read = readline (&prompt);
 
         if (line_read && *line_read) {
             add_history (line_read);
@@ -227,7 +228,7 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
 }
 
 void draw_prompt() {
-    fprintf(stdout, "\x1b[31m[%s]\n ❯ \x1b[0m", CURRENT_DIR);
+    //fprintf(stdout, "\x1b[31m[%s]\n ❯ \x1b[0m", CURRENT_DIR);
 }
 
 
@@ -294,7 +295,7 @@ int main(int argc, char ** argv) {
                 free(cmds);
                 free(logical_op);
             }
-            free(cmd);
+            //free(cmd);
             fflush(stdin);
 
         }
