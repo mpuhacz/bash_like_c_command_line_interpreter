@@ -174,7 +174,6 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
 
         // child
         case 0: {
-            printf("BEDE KURWA WYKONYWA %s", args[0]);
             int pipe_idx = has_pipe(args, args_count);
             pid_t child_pid = -1;
 
@@ -292,22 +291,22 @@ void kill_task() {
 }
 
 void sigchld_handler(int signal) {
-
     int status;
-    pid_t child = waitpid(-1, &status, WNOHANG);
-    for (int i = 0; i < bg_proc_count; i++) {
-        proc_obj * p = bgproc[i];
-        if (bgproc[i]->pid == child) {
-            char * str_status;
-            if (status) str_status = strsignal(status);
-            else str_status = "Done";
-            fprintf(stdout, "[%d] pid: %d, name: %s, status: %s\n", i, child, bgproc[i]->name, str_status);
-            free(bgproc[i]);
-            bg_proc_count--;
+    pid_t child;
+    while((child = waitpid(-1, &status, WNOHANG)) > 0) {
+        for (int i = 0; i < bg_proc_count; i++) {
+            proc_obj *p = bgproc[i];
+            if (bgproc[i]->pid == child) {
+                char *str_status;
+                if (status > 1) str_status = strsignal(status);
+                else if (status == 1) str_status = "exit 1";
+                else str_status = "done";
+                fprintf(stdout, "[%d] pid: %d, name: %s, status: %s\n", i+1, child, bgproc[i]->name, str_status);
+                free(bgproc[i]);
+                bg_proc_count--;
+            }
         }
     }
-    perror("sigchl handler");
-
 }
 
 int main(int argc, char ** argv) {
