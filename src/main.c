@@ -209,6 +209,8 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
         // owner
         default: {
             if(run_background) {
+//                waitpid(pid, &status, WNOHANG);
+//                bgproc[cur_bg_proc++] = pid;
                 fprintf(stdout, "%s pid: %d\n", args[0], pid);
             } else {
                 do {
@@ -268,11 +270,17 @@ void kill_task() {
      */
     RUNNING = 0;
 }
+void sigchld_handler(int signal) {
+    pid_t child;
+    int status;
+    waitpid(-1, &status, WNOHANG);
+}
 
 int main(int argc, char ** argv) {
     getcwd(CURRENT_DIR, MAX_INPUT_LEN);
     signal(SIGINT, kill_task);
     signal(SIGPIPE, SIG_IGN);
+    signal(SIGCHLD, sigchld_handler);
     char * cmd, **cmds;
     char * logical_op;
     int logical_op_count;
