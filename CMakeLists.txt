@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.3)
-project(SOP2)
+project(sop2_university_project)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+
+
+include_directories(/usr/include/readline)
 
 set(SOURCE_FILES
     src/builtin.c
@@ -13,4 +16,7 @@ set(SOURCE_FILES
     src/parser.c
     src/parser.h)
 
-add_executable(SOP2 ${SOURCE_FILES})
+add_executable(sop2_university_project ${SOURCE_FILES})
+
+
+TARGET_LINK_LIBRARIES(sop2_university_project readline)

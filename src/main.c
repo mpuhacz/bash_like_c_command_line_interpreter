@@ -31,6 +31,7 @@ void add_bg_process(char * name, int pid) {
     p->pid = pid;
     char * n = malloc(sizeof(char) * strlen(name));
     strncpy(n, name, strlen(name));
+    n[strlen(name)] = (char) NULL;
     p->name = n;
     bgproc[bg_proc_count++] = p;
 }
@@ -289,11 +290,13 @@ void kill_task() {
      */
     RUNNING = 0;
 }
+
 void sigchld_handler(int signal) {
-    pid_t child;
+
     int status;
+    pid_t child = waitpid(-1, &status, WNOHANG);
     for (int i = 0; i < bg_proc_count; i++) {
-        child = waitpid(bgproc[i]->pid, &status, WNOHANG);
+        proc_obj * p = bgproc[i];
         if (bgproc[i]->pid == child) {
             char * str_status;
             if (status) str_status = strsignal(status);
@@ -303,6 +306,7 @@ void sigchld_handler(int signal) {
             bg_proc_count--;
         }
     }
+    perror("sigchl handler");
 
 }
 
@@ -339,7 +343,7 @@ int main(int argc, char ** argv) {
                 free(logical_op);
             }
             //free(cmd);
-            fflush(stdin);
+            //fflush(stdin);
 
         }
     }

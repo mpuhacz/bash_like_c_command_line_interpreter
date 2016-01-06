@@ -1,8 +1,8 @@
 CC=gcc
 LD=gcc
 
-CFLAGS=--std=c11
-LDFLAGS=-lreadline
+CFLAGS=--std=c11 -lreadline
+LDFLAGS=-L/usr/local/lib -I/usr/local/include -lreadline
 
 SRCS=$(shell ls src/*.c)
 TARGET=SOPshell
@@ -10,7 +10,7 @@ TARGET=SOPshell
 OBJS=$(addsuffix .o, $(SRCS:src/%=obj/%))
 
 $(TARGET): $(OBJS) 
-	$(LD) $(LDFLAGS) $(OBJS) -o $(TARGET)
+	$(LD)  $(OBJS) -o $(TARGET) $(LDFLAGS)
 
 obj/%.c.o: src/%.c .depend
 	$(CC) -c $(CFLAGS) $< -o $@
