@@ -15,6 +15,26 @@
 volatile  int RUNNING = 0;
 char prompt[100];
 
+typedef struct proc_obj proc_obj;
+struct proc_obj {
+    int pid;
+    char * name;
+};
+
+proc_obj * bgproc[300];
+
+int bg_proc_count = 0;
+
+
+void add_bg_process(char * name, int pid) {
+    proc_obj * p = malloc(sizeof(proc_obj));
+    p->pid = pid;
+    char * n = malloc(sizeof(char) * strlen(name));
+    strncpy(n, name, strlen(name));
+    p->name = n;
+    bgproc[bg_proc_count++] = p;
+}
+
 char * read_cmd() {
     /*
      * funkcja odczytuje komende
@@ -193,7 +213,6 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
             };
             dup2(_stdin, 0);
             dup2(_stdout, 1);
-            //if (run_background) setpgid(0, 0);
             int result = execvp(args[0], args);
             if ( result == -1) {
                 fprintf(stderr, "SOPshell: komenda nie znaleziona: %s\n", args[0]);
@@ -209,9 +228,9 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
         // owner
         default: {
             if(run_background) {
-//                waitpid(pid, &status, WNOHANG);
-//                bgproc[cur_bg_proc++] = pid;
-                fprintf(stdout, "%s pid: %d\n", args[0], pid);
+                waitpid(pid, &status, WNOHANG);
+                add_bg_process(args[0], pid);
+                fprintf(stdout, "[%d] %s pid: %d\n", bg_proc_count, args[0], pid);
             } else {
                 do {
                     RUNNING = 1;
@@ -273,7 +292,18 @@ void kill_task() {
 void sigchld_handler(int signal) {
     pid_t child;
     int status;
-    waitpid(-1, &status, WNOHANG);
+    for (int i = 0; i < bg_proc_count; i++) {
+        child = waitpid(bgproc[i]->pid, &status, WNOHANG);
+        if (bgproc[i]->pid == child) {
+            char * str_status;
+            if (status) str_status = strsignal(status);
+            else str_status = "Done";
+            fprintf(stdout, "[%d] pid: %d, name: %s, status: %s\n", i, child, bgproc[i]->name, str_status);
+            free(bgproc[i]);
+            bg_proc_count--;
+        }
+    }
+
 }
 
 int main(int argc, char ** argv) {
