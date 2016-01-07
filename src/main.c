@@ -1,8 +1,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -10,9 +12,11 @@
 #include "helpers.h"
 #include "parser.h"
 #include "builtin.h"
-#include <readline/readline.h>
 
-volatile  int RUNNING = 0;
+
+
+
+volatile int RUNNING = 1;
 char prompt[100];
 
 typedef struct proc_obj proc_obj;
@@ -21,7 +25,7 @@ struct proc_obj {
     char * name;
 };
 
-proc_obj * bgproc[300];
+proc_obj * bgproc[1024];
 
 int bg_proc_count = 0;
 
@@ -34,54 +38,56 @@ void add_bg_process(char * name, int pid) {
     n[strlen(name)] = (char) NULL;
     p->name = n;
     bgproc[bg_proc_count++] = p;
+    if (bg_proc_count==1023) bg_proc_count = 0;
 }
 
 char * read_cmd() {
     /*
      * funkcja odczytuje komende
      */
-//    int cmd_size = MAX_INPUT_LEN;
-//    int position = 0;
-//    char *cmd = malloc(sizeof(char) * cmd_size);
-//    int c;
-//
-//    if (!cmd) {
-//        alloc_error();
-//    }
-//
-//    while (1) {
-//        c = getchar();
-//        if (c == EOF || c == '\n') {
-//            cmd[position] = '\0';
-//            return cmd;
-//        } else {
-//            cmd[position] = c;
-//        }
-//        position++;
-//        if (position >= cmd_size) {
-//            cmd_size += MAX_INPUT_LEN;
-//            cmd = realloc(cmd, cmd_size);
-//            if (!cmd) {
-//                alloc_error();
-//            }
-//        }
-//    }
+    int cmd_size = MAX_INPUT_LEN;
+    int position = 0;
+    char *cmd = malloc(sizeof(char) * cmd_size);
+    int c;
 
-        static char *line_read = NULL;
-        if (line_read) {
-            free (line_read);
-            line_read = NULL;
+    if (!cmd) {
+        alloc_error();
+    }
+
+    while (1) {
+        c = getchar();
+        if (c == EOF || c == '\n') {
+            cmd[position] = '\0';
+            return cmd;
+        } else {
+            cmd[position] = c;
         }
-
-        line_read = readline (&prompt);
-
-        if (line_read && *line_read) {
-            add_history (line_read);
+        position++;
+        if (position >= cmd_size) {
+            cmd_size += MAX_INPUT_LEN;
+            cmd = realloc(cmd, cmd_size);
+            if (!cmd) {
+                alloc_error();
+            }
         }
+    }
 
-        return (line_read);
+
+}
 
 
+
+int has_char(char ** cmd, int args_count, char * c){
+    /*
+    * funkcja zwraca index znaku c
+    * jesli go nie znajdzie, zwraca 0
+    */
+    for(int i=0; i<args_count; i++) {
+        if (strcmp(cmd[i], &c) == 0) {
+            return i;
+        }
+    }
+    return 0;
 }
 
 int has_pipe(char ** cmd, int args_count) {
@@ -89,14 +95,8 @@ int has_pipe(char ** cmd, int args_count) {
      * funkcja zwraca index operatora potoku
      * jesli go nie znajdzie, zwraca 0
      */
-    for(int i=0; i<args_count; i++) {
-        if (strcmp(cmd[i], "|") == 0) {
-            return i;
-        }
-    }
-    return 0;
+    return has_char(cmd, args_count, '|');
 }
-
 
 int parse_cmd(char ** cmd, int args_count, int logical, int _stdin, int _stdout) {
     /*
@@ -117,16 +117,16 @@ int parse_cmd(char ** cmd, int args_count, int logical, int _stdin, int _stdout)
             for (int i = 0; i < args_count; i++) {
 
                 // stdout
-                if (strcmp(cmd[i], "1>") == 0) {
+                if (strcmp(cmd[i], ">") == 0) {
                     if (!cmd[i + 1]) {
-                        fprintf(stderr, "Brakujący argument dla przekierowania STDOUT\n");
+                        fprintf(stderr, "Brakujący argument dla przekierowania\n");
                         return 0;
                     }
                 }
                 // stderr
-                if (strcmp(cmd[i], "2>") == 0) {
+                if (strcmp(cmd[i], "<") == 0) {
                     if (!cmd[i + 1]) {
-                        fprintf(stderr, "Brakujący argument dla przekierowania STDERR\n");
+                        fprintf(stderr, "Brakujący argument dla przekierowania\n");
                         return 0;
                     }
                 }
@@ -167,7 +167,7 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
 
         // error
         case -1: {
-            perror("SOPshell");
+            perror("SOPshell fork");
             status = EXIT_FAILURE;
             break;
         }
@@ -181,14 +181,14 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
             if(pipe_idx) {
                 int _pipe[2];
                 if (pipe(_pipe) == -1) {
-                    perror("tworzenie strumienia nienazwanego");
+                    perror("SOPshell pipe");
                     exit(EXIT_FAILURE);
                 }
 
                 child_pid = fork();
                 switch (child_pid) {
                     case -1: {
-                        perror("SOPshell");
+                        perror("SOPshell fork");
                         status = EXIT_FAILURE;
                         break;
                     }
@@ -213,8 +213,33 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
             };
             dup2(_stdin, 0);
             dup2(_stdout, 1);
+
+            int redirect_stdout = has_char(args, args_count, '>');
+            if (redirect_stdout && args[redirect_stdout+1]) {
+                int fd = open(args[redirect_stdout+1], O_RDWR | O_CREAT, S_IRWXU | S_IRWXG);
+                args[redirect_stdout] = NULL;
+                if(fd == -1) {
+                    perror("SOPshell open");
+                }
+                dup2(fd, _stdin);
+                close(fd);
+
+            }
+
+            int redirect_stdin = has_char(args, args_count, '<');
+            if (redirect_stdin && args[redirect_stdin+1]) {
+                int fd = open(args[redirect_stdin+1], O_RDONLY);
+                args[redirect_stdin] = NULL;
+                if(fd == -1) {
+                    perror("SOPshell open");
+                }
+                dup2(0, fd);
+                //close(fd);
+            }
+
+
             int result = execvp(args[0], args);
-            if ( result == -1) {
+            if (result == -1) {
                 fprintf(stderr, "SOPshell: komenda nie znaleziona: %s\n", args[0]);
                 result = EXIT_FAILURE;
             }
@@ -228,18 +253,18 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
         // owner
         default: {
             if(run_background) {
-                waitpid(pid, &status, WNOHANG);
                 add_bg_process(args[0], pid);
                 fprintf(stdout, "[%d] %s pid: %d\n", bg_proc_count, args[0], pid);
             } else {
                 do {
                     RUNNING = 1;
                     waitpid(pid, &status, WUNTRACED);
-                    if (!RUNNING) {
-                        kill(pid, SIGINT);
+                    if(!RUNNING) {
+                        //kill(pid, SIGINT);
                         printf("\n");
                     }
                 } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+                //printf("pid: %d, status:%d, WIFEXITED: %d, WEXITSTATUS: %d, WIFSIGNALED: %d, WTERMSIG: %d\n", pid, status, WIFEXITED(status), WEXITSTATUS(status), WIFSIGNALED(status), WTERMSIG(status));
             }
             if (is_child) {
                 exit(EXIT_SUCCESS);
@@ -247,14 +272,13 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
 
         }
     }
-
     return status == EXIT_SUCCESS;
 
 }
 
-void draw_prompt() {
-    sprintf(prompt, "\x1b[31m[%s]\n ❯ \x1b[0m", CURRENT_DIR);
-    //fprintf(stdout, "\x1b[31m[%s]\n ❯ \x1b[0m", CURRENT_DIR);
+void print_prompt() {
+    // sprintf(prompt, "\x1b[31m[%s]\n ❯ \x1b[0m", CURRENT_DIR);
+    fprintf(stdout, "\x1b[31m[%s]\n ❯ \x1b[0m", CURRENT_DIR);
 }
 
 
@@ -283,37 +307,40 @@ int prepare_cmds(char **cmd, char *ops, int ops_count) {
 }
 
 
-void kill_task() {
-    /*
-     * przechwytuje ctrl+c (SIGINT) i wysyła go do aktualnie działającego procesu
-     */
+void sigint_handler() {
     RUNNING = 0;
 }
 
 void sigchld_handler(int signal) {
     int status;
-    pid_t child;
-    while((child = waitpid(-1, &status, WNOHANG)) > 0) {
-//        for (int i = 0; i < bg_proc_count; i++) {
-//            proc_obj *p = bgproc[i];
-//            if (bgproc[i]->pid == child) {
-//                char *str_status;
-//                if (status > 1) str_status = strsignal(status);
-//                else if (status == 1) str_status = "exit 1";
-//                else str_status = "done";
-//                fprintf(stdout, "[%d] pid: %d, name: %s, status: %s\n", i+1, child, bgproc[i]->name, str_status);
-//                free(bgproc[i]);
-//                bg_proc_count--;
-//            }
-//        }
+    pid_t pid;
+    while (1)
+    {
+        pid = waitpid(-1, &status, WNOHANG);
+        if (pid <= 0)
+            return;
+
+        for (int i = 0; i < 300; i++) {
+            if (bgproc[i] && bgproc[i]->pid == pid) {
+                char *str_status;
+                if (status > 1) str_status = strsignal(status);
+                else if (status == 1) str_status = "exit 1";
+                else str_status = "done";
+                fprintf(stdout, "\npid: %d, nazwa: %s, status: %s\n", pid, bgproc[i]->name, str_status);
+                free(bgproc[i]);
+                return;
+            }
+        }
     }
+
 }
 
 int main(int argc, char ** argv) {
+
+
     getcwd(CURRENT_DIR, MAX_INPUT_LEN);
-    signal(SIGINT, kill_task);
-    signal(SIGPIPE, SIG_IGN);
-    signal(SIGCHLD, sigchld_handler);
+
+
     char * cmd, **cmds;
     char * logical_op;
     int logical_op_count;
@@ -332,7 +359,12 @@ int main(int argc, char ** argv) {
         }
     } else {
         while (1) {
-            draw_prompt();
+
+            signal(SIGINT, sigint_handler);
+            signal(SIGPIPE, SIG_IGN);
+            signal(SIGCHLD, sigchld_handler);
+
+            print_prompt();
             cmd = read_cmd();
             if (strlen(cmd) > 0) {
                 logical_op = malloc(100*sizeof(char));
@@ -341,8 +373,8 @@ int main(int argc, char ** argv) {
                 free(cmds);
                 free(logical_op);
             }
-            //free(cmd);
-            //fflush(stdin);
+            free(cmd);
+            fflush(stdin);
 
         }
     }

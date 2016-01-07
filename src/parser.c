@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+#include "main.h"
 #include "parser.h"
 #include "helpers.h"
 
@@ -17,8 +19,7 @@ token_to_function logic_tokens[] = {
 
 
 int _any(int val, char ** cmd, int args_count) {
-    parse_cmd(cmd, args_count, 1, 0, 1);
-    return 1;
+    return parse_cmd(cmd, args_count, 1, 0, 1);
 }
 
 int _and(int val, char ** cmd, int args_count) {
