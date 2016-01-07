@@ -6,6 +6,7 @@
 #define BUILTIN_H
 
 int cd(char ** args);
+int help(char ** args);
 int (*commands_func[]) (char **);
 int availible_cmds();
 char *commands_name[];

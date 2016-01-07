@@ -4,17 +4,20 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include "main.h"
 #include "builtin.h"
 
 char *commands_name[] = {
     "cd",
+    "help",
     "exit"
 };
 
 int (*commands_func[]) (char **) = {
     &cd,
+    &help,
     &exit
 };
 
@@ -29,6 +32,10 @@ int cd(char ** args) {
     }
     getcwd(CURRENT_DIR, MAX_INPUT_LEN);
     return 1;
+}
+
+int help(char ** args) {
+    fprintf(stdout, "rozpoznawane operatory: <, >, |, &&, ||, ;; \n");
 }
 
 int availible_cmds() {

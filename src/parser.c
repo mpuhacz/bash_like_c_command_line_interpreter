@@ -14,7 +14,7 @@ token_to_function logic_tokens[] = {
     { '&', _and },
     { '|', _or  },
     { ';', _any },
-    { NULL, NULL}
+    { (char) NULL, NULL}
 };
 
 
@@ -35,7 +35,7 @@ int check_token(char * cmd, int pos) {
      *  Funkcja sprawdza czy 2 kolejne znaki naleza do operatorów logicznych
      */
     if (cmd[pos+1]) {
-        for(int i=0; logic_tokens[i].token != NULL; i++) {
+        for(int i=0; logic_tokens[i].token != (int) NULL; i++) {
             if (cmd[pos] == logic_tokens[i].token && cmd[pos + 1] == logic_tokens[i].token) {
                 return 1;
             }
@@ -48,7 +48,7 @@ int token_idx(char t) {
     /*
      * Zwraca index operatora logicznego w tablicy
      */
-    for(int i=0; logic_tokens[i].token != NULL; i++) {
+    for(int i=0; logic_tokens[i].token != (int) NULL; i++) {
         if (t == logic_tokens[i].token) {
             return i;
         }
@@ -78,7 +78,7 @@ char ** split_by_logical_operators(char * cmd, char * logical_operators, int * a
                 alloc_error();
             } else {
                 strncpy(t, &cmd[new_pos], i - new_pos);
-                t[i - new_pos] = NULL;
+                t[i - new_pos] = (char) NULL;
                 tokens[iter] = t;
                 logical_operators[iter++] = cmd[i];
                 new_pos = i+2;
@@ -87,7 +87,7 @@ char ** split_by_logical_operators(char * cmd, char * logical_operators, int * a
     }
     char * t = malloc((strlen(cmd) - new_pos + 1) * sizeof(char));
     strncpy(t, &cmd[new_pos], strlen(cmd) - new_pos + 1);
-    logical_operators[iter] = NULL;
+    logical_operators[iter] = (char) NULL;
     tokens[iter] = t;
     *arg_count = iter;
     return tokens;
