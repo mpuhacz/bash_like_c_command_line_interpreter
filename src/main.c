@@ -217,24 +217,25 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
             int redirect_stdout = has_char(args, args_count, '>');
             if (redirect_stdout && args[redirect_stdout+1]) {
                 int fd = open(args[redirect_stdout+1], O_RDWR | O_CREAT, S_IRWXU | S_IRWXG);
-                args[redirect_stdout] = NULL;
                 if(fd == -1) {
                     perror("SOPshell open");
+                } else {
+                    args[redirect_stdout] = NULL;
+                    args_count = redirect_stdout;
+                    dup2(fd, _stdout);
+                    close(fd);
                 }
-                dup2(fd, _stdin);
-                close(fd);
-
             }
 
             int redirect_stdin = has_char(args, args_count, '<');
             if (redirect_stdin && args[redirect_stdin+1]) {
                 int fd = open(args[redirect_stdin+1], O_RDONLY);
-                args[redirect_stdin] = NULL;
                 if(fd == -1) {
                     perror("SOPshell open");
                 }
-                dup2(0, fd);
-                //close(fd);
+                args[redirect_stdin] = NULL;
+                dup2(fd, _stdin);
+                close(fd);
             }
 
 
