@@ -262,10 +262,12 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
                     RUNNING = 1;
                     waitpid(pid, &status, WUNTRACED);
                     if(!RUNNING) {
-                        //kill(pid, SIGINT);
+                        kill(pid, SIGINT);
                         printf("\n");
                     }
                 } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+                if (WIFEXITED(status)) status = WEXITSTATUS(status);
+                if (WIFSIGNALED(status)) status = EXIT_FAILURE;
                 //printf("pid: %d, status:%d, WIFEXITED: %d, WEXITSTATUS: %d, WIFSIGNALED: %d, WTERMSIG: %d\n", pid, status, WIFEXITED(status), WEXITSTATUS(status), WIFSIGNALED(status), WTERMSIG(status));
             }
             if (is_child) {
@@ -274,6 +276,7 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
 
         }
     }
+    //printf("status: %d", status);
     return status == EXIT_SUCCESS;
 
 }
