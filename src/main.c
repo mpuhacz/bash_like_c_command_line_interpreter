@@ -98,9 +98,9 @@ int has_pipe(char ** cmd, int args_count) {
     return has_char(cmd, args_count, '|');
 }
 
-int parse_cmd(char ** cmd, int args_count, int logical, int _stdin, int _stdout) {
+int check_cmd(char **cmd, int args_count, int logical, int _stdin, int _stdout) {
     /*
-     * funkcja sprawdza przekazana komendę pod względem operatorów: "&", "1>", "2>", "|"
+     * funkcja sprawdza przekazana komendę pod względem operatorów: "&", "1>", "2>"
      * przekazuje ją do wykonania i zwraca status wyjscia otrzymany od funkcji
      * wywołującej komendę
      */
@@ -206,6 +206,7 @@ int exec_cmd(char **args, int args_count, int run_background, int logical, int _
                         memcpy(new_args, args, pipe_idx * sizeof(args[0]));
                         new_args[pipe_idx] = NULL;
                         args = new_args;
+                        args_count = pipe_idx;
                         close(_pipe[0]);
                         _stdout = _pipe[1];
                     }
@@ -295,7 +296,7 @@ int prepare_cmds(char **cmd, char *ops, int ops_count) {
     char ** args;
     int logical = ops_count > 0;
     args = split_cmd(cmd[iter++], &args_count);
-    int result = parse_cmd(args, args_count, logical, stdin, stdout);
+    int result = check_cmd(args, args_count, logical, stdin, stdout);
     free(args);
     if (logical) {
         do {

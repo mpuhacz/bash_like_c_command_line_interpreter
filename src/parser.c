@@ -19,15 +19,15 @@ token_to_function logic_tokens[] = {
 
 
 int _any(int val, char ** cmd, int args_count) {
-    return parse_cmd(cmd, args_count, 1, 0, 1);
+    return check_cmd(cmd, args_count, 1, 0, 1);
 }
 
 int _and(int val, char ** cmd, int args_count) {
-    return val && parse_cmd(cmd, args_count, 1, 0, 1);
+    return val && check_cmd(cmd, args_count, 1, 0, 1);
 }
 
 int _or(int val, char ** cmd, int args_count) {
-    return val || parse_cmd(cmd, args_count, 1, 0, 1);
+    return val || check_cmd(cmd, args_count, 1, 0, 1);
 }
 
 int check_token(char * cmd, int pos) {
